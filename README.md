@@ -1,2 +1,4 @@
 # dorky
-Domain Orchestration Go Library
+
+dorky is a Domain Orchestration Go Library
+
