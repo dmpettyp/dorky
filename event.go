@@ -6,6 +6,12 @@ import (
 	"github.com/dmpettyp/id"
 )
 
+type EventID struct{ id.ID }
+
+var NewEventID, MustNewEventID, ParseEventID = id.Intitalizers(
+	func(id id.ID) EventID { return EventID{ID: id} },
+)
+
 // Event defines the interface required by all dorky domain events. Much of
 // this interface is provided when embedding a BaseEvent into the event
 // implementation, however EntityID() and EntityType() must be provided by the
