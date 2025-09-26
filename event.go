@@ -18,42 +18,39 @@ var NewEventID, MustNewEventID, ParseEventID = id.Intitalizers(
 // implementation.
 type Event interface {
 	isEvent()
-	ID() EventID
-	Type() string
-	Timestamp() time.Time
-	EntityID() id.ID
-	EntityType() string
+	isInitialized() bool
+	SetEntity(entityType string, entityID id.ID)
+	// probalby need Getters eventually
 }
 
 // BaseEvent provides an implementation of much of the Event interface which
 // can be embedded in specific domain Events defined within client applications
 type BaseEvent struct {
-	eventID   EventID
-	eventType string
-	timestamp time.Time
+	EventID     EventID
+	EventType   string
+	Timestamp   time.Time
+	EntityType  string
+	EntityID    id.ID
+	initialized bool
 }
 
 // BaseEvent must implement isEvent to be recognized as a dorky Event
 func (*BaseEvent) isEvent() {}
 
-// Init sets the BaseEvent eventType and initializes its ID and timestamp
+// Init sets the BaseEvent eventType, entityType and entityID, and initializes
+// its ID and timestamp
 func (e *BaseEvent) Init(eventType string) {
-	e.eventID, _ = NewEventID()
-	e.timestamp = time.Now().UTC()
-	e.eventType = eventType
+	e.EventID, _ = NewEventID()
+	e.Timestamp = time.Now().UTC()
+	e.EventType = eventType
+	e.initialized = true
 }
 
-// ID returns the EventId of the BaseEvent
-func (e *BaseEvent) ID() EventID {
-	return e.eventID
+func (e *BaseEvent) SetEntity(entityType string, entityID id.ID) {
+	e.EntityType = entityType
+	e.EntityID = entityID
 }
 
-// ID returns the Type of the BaseEvent
-func (e *BaseEvent) Type() string {
-	return e.eventType
-}
-
-// ID returns the Timestamp of the BaseEvent
-func (e *BaseEvent) Timestamp() time.Time {
-	return e.timestamp
+func (e *BaseEvent) isInitialized() bool {
+	return e.initialized
 }

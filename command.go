@@ -5,3 +5,9 @@ package dorky
 type Command interface {
 	isCommand()
 }
+
+type BaseCommand struct {
+}
+
+// BaseCommand must implement isCommand to be recognized as a dorky Command
+func (*BaseCommand) isCommand() {}

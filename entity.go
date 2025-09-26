@@ -1,5 +1,10 @@
 package dorky
 
+import (
+// "encoding/json"
+// "fmt"
+)
+
 // Entity defines a base dorky Entity type that can be embedded in
 // application-defined domain models to get the ability to track domain
 // events
@@ -9,16 +14,24 @@ type Entity struct {
 
 // AddEvent appends an event to the entity's list of domain events if it has
 // been properly initialized
-func (entity *Entity) AddEvent(event Event) {
-	if event == nil {
+func (entity *Entity) AddEvent(e Event) {
+	if e == nil {
 		return
 	}
 
-	if event.ID().IsNil() {
+	if !e.isInitialized() {
 		return
 	}
 
-	entity.Events = append(entity.Events, event)
+	entity.Events = append(entity.Events, e)
+
+	// jsonData, err := json.Marshal(e)
+	//
+	// if err != nil {
+	// 	return
+	// }
+	//
+	// fmt.Println(string(jsonData))
 }
 
 // GetEvents returns the current collection of domain events that have been
