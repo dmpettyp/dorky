@@ -14,9 +14,9 @@ import (
 // the events or commands that the message bus is processing.
 type MessageBus struct {
 	started         atomic.Bool
-	commandChannel  chan commandWrapper
-	eventHandlers   map[reflect.Type][]reflect.Value
-	commandHandlers map[reflect.Type]reflect.Value
+	commands        chan messageBusCommand
+	eventHandlers   map[reflect.Type][]func(context.Context, Event) ([]Event, error)
+	commandHandlers map[reflect.Type]func(context.Context, Command) ([]Event, error)
 	eventsToProcess *Queue[Event]
 	logger          *slog.Logger
 }
@@ -25,9 +25,9 @@ func NewMessageBus(logger *slog.Logger) *MessageBus {
 	logger.Info("creating MessageBus")
 
 	mb := &MessageBus{
-		commandChannel:  make(chan commandWrapper),
-		eventHandlers:   make(map[reflect.Type][]reflect.Value),
-		commandHandlers: make(map[reflect.Type]reflect.Value),
+		commands:        make(chan messageBusCommand),
+		eventHandlers:   make(map[reflect.Type][]func(context.Context, Event) ([]Event, error)),
+		commandHandlers: make(map[reflect.Type]func(context.Context, Command) ([]Event, error)),
 		eventsToProcess: NewQueue[Event](),
 		logger:          logger,
 	}
@@ -37,7 +37,42 @@ func NewMessageBus(logger *slog.Logger) *MessageBus {
 	return mb
 }
 
-type commandWrapper struct {
+// RegisterCommandHandler registers a type-safe command handler with the
+// MessageBus. This is implemented as a function that calls
+// registerCommandHandler on the MessageBus because generic methods are not
+// allowed.
+func RegisterCommandHandler[C Command](
+	mb *MessageBus,
+	handler func(context.Context, C) ([]Event, error),
+) error {
+	var zero C
+
+	return mb.registerCommandHandler(
+		reflect.TypeOf(zero),
+		func(ctx context.Context, cmd Command) ([]Event, error) {
+			return handler(ctx, cmd.(C))
+		},
+	)
+}
+
+// RegisterEvent registers a type-safe event handler with the MessageBus. This
+// is implemented as a function that calls registerEventHandler on the
+// MessageBus because generic methods are not allowed.
+func RegisterEventHandler[E Event](
+	mb *MessageBus,
+	handler func(context.Context, E) ([]Event, error),
+) error {
+	var zero E
+
+	return mb.registerEventHandler(
+		reflect.TypeOf(zero),
+		func(ctx context.Context, evt Event) ([]Event, error) {
+			return handler(ctx, evt.(E))
+		},
+	)
+}
+
+type messageBusCommand struct {
 	command Command
 	ctx     context.Context
 	result  chan error
@@ -51,7 +86,7 @@ func (mb *MessageBus) Start(ctx context.Context) {
 
 	for {
 		select {
-		case c := <-mb.commandChannel:
+		case c := <-mb.commands:
 			err := mb.dispatchCommand(c.ctx, c.command)
 
 			select {
@@ -74,7 +109,7 @@ func (mb *MessageBus) HandleCommand(
 	defer func() { close(resultChannel) }()
 
 	select {
-	case mb.commandChannel <- commandWrapper{command, ctx, resultChannel}:
+	case mb.commands <- messageBusCommand{command, ctx, resultChannel}:
 	case <-ctx.Done():
 		return fmt.Errorf(
 			"cannot send a command to the messagebus to handle: %w", ctx.Err(),
@@ -91,70 +126,52 @@ func (mb *MessageBus) HandleCommand(
 	}
 }
 
-// RegisterHandlerMethods registers each method for the provided handler that
-// is a valid handler.
-//
-// Only one handler for each concrete Command type can be registered, but any
-// number of handlers for a concrete Event type can be registered
-//
-// RegisterHandlerMethods must be called before Start(). It will return an error
-// if called after the MessageBus has been started.
-func (mb *MessageBus) RegisterHandlerMethods(handler any) error {
+// registerCommandHandler registers a type safe handler for the commandType
+// provided. Only one handler may be registered for each commandType
+func (mb *MessageBus) registerCommandHandler(
+	commandType reflect.Type,
+	handler func(context.Context, Command) ([]Event, error),
+) error {
 	if mb.started.Load() {
 		return fmt.Errorf("cannot register handlers after MessageBus has started")
 	}
 
-	handlerValue := reflect.ValueOf(handler)
-
-	// Consider registering each handler method
-	for i := 0; i < handlerValue.NumMethod(); i++ {
-		handlerName := fmt.Sprintf(
-			"%T::%s", handler, handlerValue.Type().Method(i).Name,
-		)
-
-		mb.logger.Info("registering handler method", "name", handlerName)
-
-		handlerFunc := handlerValue.Method(i)
-
-		handlerArgType, handlerArgKind, err := validateHandler(handlerFunc)
-
-		if err != nil {
-			// Skip methods that don't match handler signature - they're not handlers
-			mb.logger.Debug("skipping non-handler method", "name", handlerName, "reason", err)
-			continue
-		}
-
-		if handlerArgKind == handlerArgKindCommand {
-			if _, ok := mb.commandHandlers[handlerArgType]; ok {
-				return fmt.Errorf(
-					"duplicate command handler for %v: %s (handler already registered)",
-					handlerArgType, handlerName,
-				)
-			}
-
-			mb.commandHandlers[handlerArgType] = handlerFunc
-
-			mb.logger.Info("registered command handler", "name", handlerName)
-		} else if handlerArgKind == handlerArgKindEvent {
-			mb.eventHandlers[handlerArgType] = append(
-				mb.eventHandlers[handlerArgType],
-				handlerFunc,
-			)
-
-			mb.logger.Info("registered event handler", "name", handlerName)
-		}
+	if _, exists := mb.commandHandlers[commandType]; exists {
+		return fmt.Errorf("handler already registered for command type %v", commandType)
 	}
+
+	mb.commandHandlers[commandType] = handler
+
+	mb.logger.Info("registered command handler", "type", commandType)
 
 	return nil
 }
 
-func (mb *MessageBus) dispatchCommand(ctx context.Context, command Command) error {
-	mb.logger.Info(
-		"messagebus dispatching command",
-		// "messageEntity", comand.GetEntity(),
-		// "messageType", message.GetType(),
-		// "message", messageToString(message),
+// registerEventHandler registers a type safe handler for the Event type
+// provided. Many handler may be registered for each Event type
+func (mb *MessageBus) registerEventHandler(
+	eventType reflect.Type,
+	handler func(context.Context, Event) ([]Event, error),
+) error {
+	if mb.started.Load() {
+		return fmt.Errorf("cannot register event handler after MessageBus has started")
+	}
+
+	mb.eventHandlers[eventType] = append(
+		mb.eventHandlers[eventType],
+		handler,
 	)
+
+	mb.logger.Info("registered event handler", "type", eventType)
+
+	return nil
+}
+
+// dispatchCommand invokes the command handler for the type of Command
+// passed in. Events generated from invoking the handler are queued and
+// dispatched to event handlers after the command handler returns.
+func (mb *MessageBus) dispatchCommand(ctx context.Context, command Command) error {
+	mb.logger.Info("messagebus dispatching command")
 
 	commandType := reflect.TypeOf(command)
 
@@ -162,18 +179,15 @@ func (mb *MessageBus) dispatchCommand(ctx context.Context, command Command) erro
 
 	if !ok {
 		mb.logger.Info("no command handler found")
-		return fmt.Errorf("no handler for command")
+		return fmt.Errorf("no handler for command type %v", commandType)
 	}
 
 	mb.logger.Info("invoking command handler")
 
-	events, err := invokeHandler(ctx, handler, command)
+	events, err := handler(ctx, command)
 
 	if err != nil {
-		mb.logger.Info(
-			"invoking command handler failed",
-			"error", err.Error(),
-		)
+		mb.logger.Info("invoking command handler failed", "error", err.Error())
 		return err
 	}
 
@@ -182,6 +196,9 @@ func (mb *MessageBus) dispatchCommand(ctx context.Context, command Command) erro
 	return nil
 }
 
+// dispatchEvents dispatches all events queued up by the MessageBus to any
+// handlers that are registered for them. Events returned by the event
+// handlers are queued up and processed before returning.
 func (mb *MessageBus) dispatchEvents(ctx context.Context) {
 	for {
 		event, ok := mb.eventsToProcess.dequeue()
@@ -190,26 +207,18 @@ func (mb *MessageBus) dispatchEvents(ctx context.Context) {
 			return
 		}
 
-		mb.logger.Info(
-			"messagebus dispatching event",
-			// "messageEntity", message.GetEntity(),
-			// "messageType", message.GetType(),
-			// "message", messageToString(message),
-		)
+		mb.logger.Info("messagebus dispatching event")
 
-		messageType := reflect.TypeOf(event)
+		eventType := reflect.TypeOf(event)
 
-		if eventHandlers, ok := mb.eventHandlers[messageType]; ok {
-			for _, handler := range eventHandlers {
+		if handlers, ok := mb.eventHandlers[eventType]; ok {
+			for _, handler := range handlers {
 				mb.logger.Info("invoking event handler")
 
-				events, err := invokeHandler(ctx, handler, event)
+				events, err := handler(ctx, event)
 
 				if err != nil {
-					mb.logger.Info(
-						"invoking event handler failed",
-						"error", err.Error(),
-					)
+					mb.logger.Info("invoking event handler failed", "error", err.Error())
 				}
 
 				mb.eventsToProcess.enqueueMultiple(events)

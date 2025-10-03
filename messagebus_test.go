@@ -89,66 +89,6 @@ type eventArg struct {
 type eventArg1 eventArg
 type eventArg2 eventArg
 
-type commandHandler1 struct {
-	CallCount int
-}
-
-func (h *commandHandler1) Handle(
-	context.Context,
-	*commandArg1,
-) (
-	[]dorky.Event,
-	error,
-) {
-	h.CallCount++
-	return []dorky.Event{&eventArg1{}, &eventArg2{}}, nil
-}
-
-type commandHandler2 struct {
-	CallCount int
-}
-
-func (h *commandHandler2) Handle(
-	context.Context,
-	*commandArg2,
-) (
-	[]dorky.Event,
-	error,
-) {
-	h.CallCount++
-	return nil, nil
-}
-
-type eventHandler1 struct {
-	CallCount int
-}
-
-func (h *eventHandler1) Handle(
-	context.Context,
-	*eventArg1,
-) (
-	[]dorky.Event,
-	error,
-) {
-	h.CallCount++
-	return nil, nil
-}
-
-type eventHandler2 struct {
-	CallCount int
-}
-
-func (h *eventHandler2) Handle(
-	context.Context,
-	*eventArg2,
-) (
-	[]dorky.Event,
-	error,
-) {
-	h.CallCount++
-	return nil, nil
-}
-
 // func TestValidHandlers(t *testing.T) {
 // 	mb := ddd.CreateMessageBus()
 //
@@ -417,32 +357,47 @@ func (h *eventHandler2) Handle(
 // 	return nil, nil
 // }
 
-func TestRegisterHandlerMethods(t *testing.T) {
-	// f := &foo{}
+func TestTypeSafeRegistration(t *testing.T) {
 	mb := dorky.NewMessageBus(logger)
 
-	ch1 := &commandHandler1{}
-	ch2 := &commandHandler2{}
-	eh1 := &eventHandler1{}
-	eh2 := &eventHandler2{}
+	cmd1Count := 0
+	cmd2Count := 0
+	evt1Count := 0
+	evt2Count := 0
 
-	mb.RegisterHandlerMethods(ch1)
-	mb.RegisterHandlerMethods(ch2)
-	mb.RegisterHandlerMethods(eh1)
-	mb.RegisterHandlerMethods(eh2)
+	// Type-safe command handlers
+	err := dorky.RegisterCommandHandler(mb, func(ctx context.Context, cmd *commandArg1) ([]dorky.Event, error) {
+		cmd1Count++
+		return []dorky.Event{&eventArg1{}, &eventArg2{}}, nil
+	})
+	require.NoError(t, err)
+
+	err = dorky.RegisterCommandHandler(mb, func(ctx context.Context, cmd *commandArg2) ([]dorky.Event, error) {
+		cmd2Count++
+		return nil, nil
+	})
+	require.NoError(t, err)
+
+	// Type-safe event handlers
+	err = dorky.RegisterEventHandler(mb, func(ctx context.Context, evt *eventArg1) ([]dorky.Event, error) {
+		evt1Count++
+		return nil, nil
+	})
+	require.NoError(t, err)
+
+	err = dorky.RegisterEventHandler(mb, func(ctx context.Context, evt *eventArg2) ([]dorky.Event, error) {
+		evt2Count++
+		return nil, nil
+	})
+	require.NoError(t, err)
 
 	go mb.Start(context.Background())
 
 	_ = mb.HandleCommand(context.Background(), &commandArg1{})
-	mb.RegisterHandlerMethods(eh2)
 	_ = mb.HandleCommand(context.Background(), &commandArg2{})
 
-	require.Equal(t, 1, ch1.CallCount)
-	require.Equal(t, 1, ch2.CallCount)
-	require.Equal(t, 1, eh1.CallCount)
-	require.Equal(t, 1, eh2.CallCount)
-	// _ = mb.Handle(context.Background(), &event1{})
-	//
-	// require.Equal(t, 1, f.eventHandlerInvocations)
-	// require.Equal(t, 1, f.commandHandlerInvocations)
+	require.Equal(t, 1, cmd1Count)
+	require.Equal(t, 1, cmd2Count)
+	require.Equal(t, 1, evt1Count)
+	require.Equal(t, 1, evt2Count)
 }
