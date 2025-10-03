@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"reflect"
+	"sync"
 	"sync/atomic"
 )
 
@@ -18,6 +19,7 @@ type MessageBus struct {
 	eventHandlers   map[reflect.Type][]func(context.Context, Event) ([]Event, error)
 	commandHandlers map[reflect.Type]func(context.Context, Command) ([]Event, error)
 	eventsToProcess *Queue[Event]
+	wg              sync.WaitGroup
 	logger          *slog.Logger
 }
 
@@ -84,9 +86,18 @@ func (mb *MessageBus) Start(ctx context.Context) {
 		return
 	}
 
+	mb.wg.Add(1)
+
+	defer mb.wg.Done()
+
 	for {
 		select {
-		case c := <-mb.commands:
+		case c, ok := <-mb.commands:
+			if !ok {
+				// Channel closed, shutdown
+				return
+			}
+
 			err := mb.dispatchCommand(c.ctx, c.command)
 
 			select {
@@ -99,6 +110,11 @@ func (mb *MessageBus) Start(ctx context.Context) {
 			return
 		}
 	}
+}
+
+func (mb *MessageBus) Stop() {
+	close(mb.commands)
+	mb.wg.Wait()
 }
 
 func (mb *MessageBus) HandleCommand(
