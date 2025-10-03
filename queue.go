@@ -26,6 +26,7 @@ func (q *Queue[T]) dequeue() (T, bool) {
 	}
 
 	item := q.items[0]
+	q.items[0] = zero // Clear reference to prevent memory leak
 	q.items = q.items[1:]
 
 	return item, true
