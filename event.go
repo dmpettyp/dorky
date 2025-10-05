@@ -8,7 +8,7 @@ import (
 
 type EventID struct{ id.ID }
 
-var NewEventID, MustNewEventID, ParseEventID = id.Intitalizers(
+var NewEventID, MustNewEventID, ParseEventID = id.Inititalizers(
 	func(id id.ID) EventID { return EventID{ID: id} },
 )
 
