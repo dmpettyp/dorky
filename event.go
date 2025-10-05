@@ -26,8 +26,8 @@ type Event interface {
 // BaseEvent provides an implementation of much of the Event interface which
 // can be embedded in specific domain Events defined within client applications
 type BaseEvent struct {
-	EventID     EventID
-	EventType   string
+	ID          EventID
+	Type        string
 	Timestamp   time.Time
 	EntityType  string
 	EntityID    id.ID
@@ -40,9 +40,9 @@ func (*BaseEvent) isEvent() {}
 // Init sets the BaseEvent eventType, entityType and entityID, and initializes
 // its ID and timestamp
 func (e *BaseEvent) Init(eventType string) {
-	e.EventID, _ = NewEventID()
+	e.ID, _ = NewEventID()
 	e.Timestamp = time.Now().UTC()
-	e.EventType = eventType
+	e.Type = eventType
 	e.initialized = true
 }
 
