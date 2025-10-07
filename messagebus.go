@@ -90,6 +90,8 @@ func (mb *MessageBus) Start(ctx context.Context) {
 
 	defer mb.wg.Done()
 
+	mb.logger.Info("starting MessageBus")
+
 	for {
 		select {
 		case c, ok := <-mb.commands:
@@ -113,6 +115,7 @@ func (mb *MessageBus) Start(ctx context.Context) {
 }
 
 func (mb *MessageBus) Stop() {
+	mb.logger.Info("stopping MessageBus")
 	close(mb.commands)
 	mb.wg.Wait()
 }
