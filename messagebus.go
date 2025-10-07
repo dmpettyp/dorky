@@ -2,6 +2,7 @@ package dorky
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"reflect"
@@ -190,7 +191,8 @@ func (mb *MessageBus) registerEventHandler(
 // passed in. Events generated from invoking the handler are queued and
 // dispatched to event handlers after the command handler returns.
 func (mb *MessageBus) dispatchCommand(ctx context.Context, command Command) error {
-	mb.logger.Info("messagebus dispatching command")
+	commandJSON, _ := json.Marshal(command)
+	mb.logger.Debug("messagebus dispatching command", "command", string(commandJSON))
 
 	commandType := reflect.TypeOf(command)
 
@@ -201,12 +203,10 @@ func (mb *MessageBus) dispatchCommand(ctx context.Context, command Command) erro
 		return fmt.Errorf("no handler for command type %v", commandType)
 	}
 
-	mb.logger.Info("invoking command handler")
-
 	events, err := handler(ctx, command)
 
 	if err != nil {
-		mb.logger.Info("invoking command handler failed", "error", err.Error())
+		mb.logger.Error("invoking command handler failed", "error", err.Error())
 		return err
 	}
 
@@ -226,18 +226,17 @@ func (mb *MessageBus) dispatchEvents(ctx context.Context) {
 			return
 		}
 
-		mb.logger.Info("messagebus dispatching event")
+		eventJSON, _ := json.Marshal(event)
+		mb.logger.Debug("messagebus dispatching event", "event", string(eventJSON))
 
 		eventType := reflect.TypeOf(event)
 
 		if handlers, ok := mb.eventHandlers[eventType]; ok {
 			for _, handler := range handlers {
-				mb.logger.Info("invoking event handler")
-
 				events, err := handler(ctx, event)
 
 				if err != nil {
-					mb.logger.Info("invoking event handler failed", "error", err.Error())
+					mb.logger.Error("invoking event handler failed", "error", err.Error())
 				}
 
 				mb.eventsToProcess.enqueueMultiple(events)
