@@ -171,7 +171,7 @@ func (repo *Repository[Entity]) Save() ([]dorky.Event, error) {
 	}
 
 	persist := func(toSave Entity) {
-		// Replace the entity whos identity matches
+		// Replace the entity whose identity matches
 		for idx, entity := range repo.Entities {
 			if repo.identityEqualFn(entity, toSave) {
 				repo.Entities[idx] = toSave

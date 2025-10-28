@@ -191,7 +191,7 @@ func (mb *MessageBus) registerEventHandler(
 // passed in. Events generated from invoking the handler are queued and
 // dispatched to event handlers after the command handler returns.
 func (mb *MessageBus) dispatchCommand(ctx context.Context, command Command) error {
-	commandJSON, _ := json.Marshal(command)
+	commandJSON, err := json.Marshal(command)
 	mb.logger.Debug("messagebus dispatching command", "command", string(commandJSON))
 
 	commandType := reflect.TypeOf(command)

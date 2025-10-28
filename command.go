@@ -8,7 +8,7 @@ import (
 
 type CommandID struct{ id.ID }
 
-var NewCommandID, MustNewCommandID, ParseCommandID = id.Inititalizers(
+var NewCommandID, MustNewCommandID, ParseCommandID = id.Create(
 	func(id id.ID) CommandID { return CommandID{ID: id} },
 )
 
