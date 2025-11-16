@@ -20,7 +20,10 @@ type Event interface {
 	isEvent()
 	isInitialized() bool
 	SetEntity(entityType string, entityID id.ID)
-	// probalby need Getters eventually
+	GetType() string
+	GetTimestamp() time.Time
+	GetEntityID() id.ID
+	GetEntityType() string
 }
 
 // BaseEvent provides an implementation of much of the Event interface which
@@ -53,4 +56,20 @@ func (e *BaseEvent) SetEntity(entityType string, entityID id.ID) {
 
 func (e *BaseEvent) isInitialized() bool {
 	return e.initialized
+}
+
+func (e *BaseEvent) GetType() string {
+	return e.Type
+}
+
+func (e *BaseEvent) GetTimestamp() time.Time {
+	return e.Timestamp
+}
+
+func (e *BaseEvent) GetEntityID() id.ID {
+	return e.EntityID
+}
+
+func (e *BaseEvent) GetEntityType() string {
+	return e.EntityType
 }
