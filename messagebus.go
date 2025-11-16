@@ -3,6 +3,7 @@ package dorky
 import (
 	"context"
 	"encoding/json"
+	// "encoding/json"
 	"fmt"
 	"log/slog"
 	"reflect"
@@ -191,6 +192,8 @@ func (mb *MessageBus) registerEventHandler(
 // passed in. Events generated from invoking the handler are queued and
 // dispatched to event handlers after the command handler returns.
 func (mb *MessageBus) dispatchCommand(ctx context.Context, command Command) error {
+	mb.logger.Debug("messagebus dispatching command", "type", command.GetType())
+
 	commandJSON, err := json.Marshal(command)
 	mb.logger.Debug("messagebus dispatching command", "command", string(commandJSON))
 
@@ -225,6 +228,8 @@ func (mb *MessageBus) dispatchEvents(ctx context.Context) {
 		if !ok {
 			return
 		}
+
+		mb.logger.Debug("messagebus dispatching event", "type", event.GetType())
 
 		eventJSON, _ := json.Marshal(event)
 		mb.logger.Debug("messagebus dispatching event", "event", string(eventJSON))

@@ -16,6 +16,7 @@ var NewCommandID, MustNewCommandID, ParseCommandID = id.Create(
 // must implement
 type Command interface {
 	isCommand()
+	GetType() string
 }
 
 type BaseCommand struct {
@@ -31,4 +32,8 @@ func (c *BaseCommand) Init(commandType string) {
 	c.ID, _ = NewCommandID()
 	c.Timestamp = time.Now().UTC()
 	c.Type = commandType
+}
+
+func (c *BaseCommand) GetType() string {
+	return c.Type
 }

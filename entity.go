@@ -19,14 +19,6 @@ func (entity *Entity) AddEvent(e Event) {
 	}
 
 	entity.Events = append(entity.Events, e)
-
-	// jsonData, err := json.Marshal(e)
-	//
-	// if err != nil {
-	// 	return
-	// }
-	//
-	// fmt.Println(string(jsonData))
 }
 
 // GetEvents returns the current collection of domain events that have been
