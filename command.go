@@ -20,9 +20,9 @@ type Command interface {
 }
 
 type BaseCommand struct {
-	ID        CommandID
-	Type      string
-	Timestamp time.Time
+	ID        CommandID `json:"id"`
+	Type      string    `json:"type"`
+	Timestamp time.Time `json:"timestamp"`
 }
 
 // BaseCommand must implement isCommand to be recognized as a dorky Command

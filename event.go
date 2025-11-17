@@ -29,11 +29,11 @@ type Event interface {
 // BaseEvent provides an implementation of much of the Event interface which
 // can be embedded in specific domain Events defined within client applications
 type BaseEvent struct {
-	ID          EventID
-	Type        string
-	Timestamp   time.Time
-	EntityType  string
-	EntityID    id.ID
+	ID          EventID   `json:"id"`
+	Type        string    `json:"type"`
+	Timestamp   time.Time `json:"timestamp"`
+	EntityType  string    `json:"entity_type"`
+	EntityID    id.ID     `json:"entity_id"`
 	initialized bool
 }
 
