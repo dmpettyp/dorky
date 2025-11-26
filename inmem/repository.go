@@ -4,7 +4,7 @@ import (
 	"errors"
 	"slices"
 
-	"github.com/dmpettyp/dorky"
+	"github.com/dmpettyp/dorky/messages"
 )
 
 // entity defines the generic interface for entities that can be stored in an
@@ -13,7 +13,7 @@ import (
 // - GetEvents() method that returns event messages generated with the entity
 // - Clone() method that returns a copy of the entity
 type entity[T any] interface {
-	GetEvents() []dorky.Event
+	GetEvents() []messages.Event
 	ResetEvents()
 	Clone() T
 }
@@ -156,7 +156,7 @@ func (repo *Repository[Entity]) FindAll(
 
 // Save persists any entities found in the repository's Transaction collection into
 // its persistent store (the Entities collection)
-func (repo *Repository[Entity]) Save() ([]dorky.Event, error) {
+func (repo *Repository[Entity]) Save() ([]messages.Event, error) {
 	// Validate all constraints before persisting anything to ensure atomicity
 	for _, toSave := range repo.Transaction {
 		for _, entity := range repo.Entities {
@@ -183,7 +183,7 @@ func (repo *Repository[Entity]) Save() ([]dorky.Event, error) {
 		repo.Entities = append(repo.Entities, toSave)
 	}
 
-	var events []dorky.Event
+	var events []messages.Event
 
 	for _, transactionEntity := range repo.Transaction {
 		persist(transactionEntity)

@@ -1,4 +1,4 @@
-package dorky
+package messages
 
 import (
 	"time"

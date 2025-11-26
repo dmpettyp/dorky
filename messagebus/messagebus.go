@@ -1,14 +1,15 @@
-package dorky
+package messagebus
 
 import (
 	"context"
 	"encoding/json"
-	// "encoding/json"
 	"fmt"
 	"log/slog"
 	"reflect"
 	"sync"
 	"sync/atomic"
+
+	"github.com/dmpettyp/dorky/messages"
 )
 
 // The MessageBus is a dispatcher for Events and Commands.
@@ -18,21 +19,21 @@ import (
 type MessageBus struct {
 	started         atomic.Bool
 	commands        chan messageBusCommand
-	eventHandlers   map[reflect.Type][]func(context.Context, Event) ([]Event, error)
-	commandHandlers map[reflect.Type]func(context.Context, Command) ([]Event, error)
-	eventsToProcess *Queue[Event]
+	eventHandlers   map[reflect.Type][]func(context.Context, messages.Event) ([]messages.Event, error)
+	commandHandlers map[reflect.Type]func(context.Context, messages.Command) ([]messages.Event, error)
+	eventsToProcess *Queue[messages.Event]
 	wg              sync.WaitGroup
 	logger          *slog.Logger
 }
 
-func NewMessageBus(logger *slog.Logger) *MessageBus {
+func New(logger *slog.Logger) *MessageBus {
 	logger.Info("creating MessageBus")
 
 	mb := &MessageBus{
 		commands:        make(chan messageBusCommand),
-		eventHandlers:   make(map[reflect.Type][]func(context.Context, Event) ([]Event, error)),
-		commandHandlers: make(map[reflect.Type]func(context.Context, Command) ([]Event, error)),
-		eventsToProcess: NewQueue[Event](),
+		eventHandlers:   make(map[reflect.Type][]func(context.Context, messages.Event) ([]messages.Event, error)),
+		commandHandlers: make(map[reflect.Type]func(context.Context, messages.Command) ([]messages.Event, error)),
+		eventsToProcess: NewQueue[messages.Event](),
 		logger:          logger,
 	}
 
@@ -45,15 +46,15 @@ func NewMessageBus(logger *slog.Logger) *MessageBus {
 // MessageBus. This is implemented as a function that calls
 // registerCommandHandler on the MessageBus because generic methods are not
 // allowed.
-func RegisterCommandHandler[C Command](
+func RegisterCommandHandler[C messages.Command](
 	mb *MessageBus,
-	handler func(context.Context, C) ([]Event, error),
+	handler func(context.Context, C) ([]messages.Event, error),
 ) error {
 	var zero C
 
 	return mb.registerCommandHandler(
 		reflect.TypeOf(zero),
-		func(ctx context.Context, cmd Command) ([]Event, error) {
+		func(ctx context.Context, cmd messages.Command) ([]messages.Event, error) {
 			return handler(ctx, cmd.(C))
 		},
 	)
@@ -62,22 +63,22 @@ func RegisterCommandHandler[C Command](
 // RegisterEvent registers a type-safe event handler with the MessageBus. This
 // is implemented as a function that calls registerEventHandler on the
 // MessageBus because generic methods are not allowed.
-func RegisterEventHandler[E Event](
+func RegisterEventHandler[E messages.Event](
 	mb *MessageBus,
-	handler func(context.Context, E) ([]Event, error),
+	handler func(context.Context, E) ([]messages.Event, error),
 ) error {
 	var zero E
 
 	return mb.registerEventHandler(
 		reflect.TypeOf(zero),
-		func(ctx context.Context, evt Event) ([]Event, error) {
+		func(ctx context.Context, evt messages.Event) ([]messages.Event, error) {
 			return handler(ctx, evt.(E))
 		},
 	)
 }
 
 type messageBusCommand struct {
-	command Command
+	command messages.Command
 	ctx     context.Context
 	result  chan error
 }
@@ -124,7 +125,7 @@ func (mb *MessageBus) Stop() {
 
 func (mb *MessageBus) HandleCommand(
 	ctx context.Context,
-	command Command,
+	command messages.Command,
 ) error {
 	resultChannel := make(chan error)
 	defer func() { close(resultChannel) }()
@@ -151,7 +152,7 @@ func (mb *MessageBus) HandleCommand(
 // provided. Only one handler may be registered for each commandType
 func (mb *MessageBus) registerCommandHandler(
 	commandType reflect.Type,
-	handler func(context.Context, Command) ([]Event, error),
+	handler func(context.Context, messages.Command) ([]messages.Event, error),
 ) error {
 	if mb.started.Load() {
 		return fmt.Errorf("cannot register handlers after MessageBus has started")
@@ -172,7 +173,7 @@ func (mb *MessageBus) registerCommandHandler(
 // provided. Many handler may be registered for each Event type
 func (mb *MessageBus) registerEventHandler(
 	eventType reflect.Type,
-	handler func(context.Context, Event) ([]Event, error),
+	handler func(context.Context, messages.Event) ([]messages.Event, error),
 ) error {
 	if mb.started.Load() {
 		return fmt.Errorf("cannot register event handler after MessageBus has started")
@@ -191,7 +192,7 @@ func (mb *MessageBus) registerEventHandler(
 // dispatchCommand invokes the command handler for the type of Command
 // passed in. Events generated from invoking the handler are queued and
 // dispatched to event handlers after the command handler returns.
-func (mb *MessageBus) dispatchCommand(ctx context.Context, command Command) error {
+func (mb *MessageBus) dispatchCommand(ctx context.Context, command messages.Command) error {
 	mb.logger.Info("messagebus dispatching command", "type", command.GetType())
 
 	commandJSON, err := json.Marshal(command)

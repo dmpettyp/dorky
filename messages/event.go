@@ -1,9 +1,9 @@
-package dorky
+package messages
 
 import (
 	"time"
 
-	"github.com/dmpettyp/id"
+	"github.com/dmpettyp/dorky/id"
 )
 
 type EventID struct{ id.ID }
@@ -18,7 +18,7 @@ var NewEventID, MustNewEventID, ParseEventID = id.Create(
 // implementation.
 type Event interface {
 	isEvent()
-	isInitialized() bool
+	IsInitialized() bool
 	SetEntity(entityType string, entityID id.ID)
 	GetType() string
 	GetTimestamp() time.Time
@@ -54,7 +54,7 @@ func (e *BaseEvent) SetEntity(entityType string, entityID id.ID) {
 	e.EntityID = entityID
 }
 
-func (e *BaseEvent) isInitialized() bool {
+func (e *BaseEvent) IsInitialized() bool {
 	return e.initialized
 }
 

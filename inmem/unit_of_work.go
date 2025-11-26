@@ -3,11 +3,11 @@ package inmem
 import (
 	"context"
 
-	"github.com/dmpettyp/dorky"
+	"github.com/dmpettyp/dorky/messages"
 )
 
 type repo interface {
-	Save() ([]dorky.Event, error)
+	Save() ([]messages.Event, error)
 	Reset()
 }
 
@@ -32,7 +32,7 @@ func NewUnitOfWork[Repos any](repos Repos, repoList ...repo) *UnitOfWork[Repos] 
 func (uow *UnitOfWork[Repos]) Run(
 	_ context.Context,
 	f func(Repos) error,
-) ([]dorky.Event, error) {
+) ([]messages.Event, error) {
 	resetRepos := func() {
 		for _, r := range uow.repoList {
 			r.Reset()
@@ -50,7 +50,7 @@ func (uow *UnitOfWork[Repos]) Run(
 		return nil, err
 	}
 
-	var committedEvents []dorky.Event
+	var committedEvents []messages.Event
 
 	for _, r := range uow.repoList {
 		events, err := r.Save()

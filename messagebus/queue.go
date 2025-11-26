@@ -1,4 +1,4 @@
-package dorky
+package messagebus
 
 // Queue implements a generic queue
 type Queue[T any] struct {

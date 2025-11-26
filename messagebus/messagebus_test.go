@@ -1,16 +1,16 @@
-package dorky_test
+package messagebus_test
 
 import (
 	"context"
 	"fmt"
 	"io"
 	"log/slog"
-	// "os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dmpettyp/dorky"
+	"github.com/dmpettyp/dorky/messagebus"
+	"github.com/dmpettyp/dorky/messages"
 )
 
 var logger = slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -19,7 +19,7 @@ var logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 
 // Define valid arguments for event and command handlers
 type commandArg struct {
-	dorky.BaseCommand
+	messages.BaseCommand
 	value string
 }
 
@@ -27,7 +27,7 @@ type commandArg1 commandArg
 type commandArg2 commandArg
 
 type eventArg struct {
-	dorky.BaseEvent
+	messages.BaseEvent
 	value string
 }
 
@@ -35,7 +35,7 @@ type eventArg1 eventArg
 type eventArg2 eventArg
 
 func TestTypeSafeRegistration(t *testing.T) {
-	mb := dorky.NewMessageBus(logger)
+	mb := messagebus.New(logger)
 
 	cmd1Count := 0
 	cmd2Count := 0
@@ -43,26 +43,26 @@ func TestTypeSafeRegistration(t *testing.T) {
 	evt2Count := 0
 
 	// Type-safe command handlers
-	err := dorky.RegisterCommandHandler(mb, func(ctx context.Context, cmd *commandArg1) ([]dorky.Event, error) {
+	err := messagebus.RegisterCommandHandler(mb, func(ctx context.Context, cmd *commandArg1) ([]messages.Event, error) {
 		cmd1Count++
-		return []dorky.Event{&eventArg1{}, &eventArg2{}}, nil
+		return []messages.Event{&eventArg1{}, &eventArg2{}}, nil
 	})
 	require.NoError(t, err)
 
-	err = dorky.RegisterCommandHandler(mb, func(ctx context.Context, cmd *commandArg2) ([]dorky.Event, error) {
+	err = messagebus.RegisterCommandHandler(mb, func(ctx context.Context, cmd *commandArg2) ([]messages.Event, error) {
 		cmd2Count++
 		return nil, nil
 	})
 	require.NoError(t, err)
 
 	// Type-safe event handlers
-	err = dorky.RegisterEventHandler(mb, func(ctx context.Context, evt *eventArg1) ([]dorky.Event, error) {
+	err = messagebus.RegisterEventHandler(mb, func(ctx context.Context, evt *eventArg1) ([]messages.Event, error) {
 		evt1Count++
 		return nil, nil
 	})
 	require.NoError(t, err)
 
-	err = dorky.RegisterEventHandler(mb, func(ctx context.Context, evt *eventArg2) ([]dorky.Event, error) {
+	err = messagebus.RegisterEventHandler(mb, func(ctx context.Context, evt *eventArg2) ([]messages.Event, error) {
 		evt2Count++
 		return nil, nil
 	})
@@ -83,22 +83,22 @@ func TestTypeSafeRegistration(t *testing.T) {
 
 // Types for method-based handler test
 type CreateOrderCommand struct {
-	dorky.BaseCommand
+	messages.BaseCommand
 	OrderID string
 }
 
 type OrderCreatedEvent struct {
-	dorky.BaseEvent
+	messages.BaseEvent
 	OrderID string
 }
 
 type ShipOrderCommand struct {
-	dorky.BaseCommand
+	messages.BaseCommand
 	OrderID string
 }
 
 type OrderShippedEvent struct {
-	dorky.BaseEvent
+	messages.BaseEvent
 	OrderID string
 }
 
@@ -107,41 +107,41 @@ type OrderService struct {
 	ordersShipped int
 }
 
-func (s *OrderService) HandleCreateOrder(ctx context.Context, cmd *CreateOrderCommand) ([]dorky.Event, error) {
-	return []dorky.Event{&OrderCreatedEvent{OrderID: cmd.OrderID}}, nil
+func (s *OrderService) HandleCreateOrder(ctx context.Context, cmd *CreateOrderCommand) ([]messages.Event, error) {
+	return []messages.Event{&OrderCreatedEvent{OrderID: cmd.OrderID}}, nil
 }
 
-func (s *OrderService) HandleShipOrder(ctx context.Context, cmd *ShipOrderCommand) ([]dorky.Event, error) {
-	return []dorky.Event{&OrderShippedEvent{OrderID: cmd.OrderID}}, nil
+func (s *OrderService) HandleShipOrder(ctx context.Context, cmd *ShipOrderCommand) ([]messages.Event, error) {
+	return []messages.Event{&OrderShippedEvent{OrderID: cmd.OrderID}}, nil
 }
 
-func (s *OrderService) OnOrderCreated(ctx context.Context, evt *OrderCreatedEvent) ([]dorky.Event, error) {
+func (s *OrderService) OnOrderCreated(ctx context.Context, evt *OrderCreatedEvent) ([]messages.Event, error) {
 	s.ordersCreated++
 	return nil, nil
 }
 
-func (s *OrderService) OnOrderShipped(ctx context.Context, evt *OrderShippedEvent) ([]dorky.Event, error) {
+func (s *OrderService) OnOrderShipped(ctx context.Context, evt *OrderShippedEvent) ([]messages.Event, error) {
 	s.ordersShipped++
 	return nil, nil
 }
 
 // Test that method-based handlers work (handlers as methods on structs)
 func TestMethodBasedHandlers(t *testing.T) {
-	mb := dorky.NewMessageBus(logger)
+	mb := messagebus.New(logger)
 
 	svc := &OrderService{}
 
 	// Register methods as handlers
-	err := dorky.RegisterCommandHandler(mb, svc.HandleCreateOrder)
+	err := messagebus.RegisterCommandHandler(mb, svc.HandleCreateOrder)
 	require.NoError(t, err)
 
-	err = dorky.RegisterCommandHandler(mb, svc.HandleShipOrder)
+	err = messagebus.RegisterCommandHandler(mb, svc.HandleShipOrder)
 	require.NoError(t, err)
 
-	err = dorky.RegisterEventHandler(mb, svc.OnOrderCreated)
+	err = messagebus.RegisterEventHandler(mb, svc.OnOrderCreated)
 	require.NoError(t, err)
 
-	err = dorky.RegisterEventHandler(mb, svc.OnOrderShipped)
+	err = messagebus.RegisterEventHandler(mb, svc.OnOrderShipped)
 	require.NoError(t, err)
 
 	go mb.Start(context.Background())
@@ -162,52 +162,52 @@ func TestMethodBasedHandlers(t *testing.T) {
 
 // Test event cascade - events generating more events (breadth-first)
 func TestEventCascade(t *testing.T) {
-	mb := dorky.NewMessageBus(logger)
+	mb := messagebus.New(logger)
 
 	type TriggerCommand struct {
-		dorky.BaseCommand
+		messages.BaseCommand
 	}
 
 	type Level1Event struct {
-		dorky.BaseEvent
+		messages.BaseEvent
 		ID int
 	}
 
 	type Level2Event struct {
-		dorky.BaseEvent
+		messages.BaseEvent
 		ID int
 	}
 
 	type Level3Event struct {
-		dorky.BaseEvent
+		messages.BaseEvent
 		ID int
 	}
 
 	var executionOrder []string
 
 	// Command generates 2 level-1 events
-	err := dorky.RegisterCommandHandler(mb, func(ctx context.Context, cmd *TriggerCommand) ([]dorky.Event, error) {
+	err := messagebus.RegisterCommandHandler(mb, func(ctx context.Context, cmd *TriggerCommand) ([]messages.Event, error) {
 		executionOrder = append(executionOrder, "command")
-		return []dorky.Event{&Level1Event{ID: 1}, &Level1Event{ID: 2}}, nil
+		return []messages.Event{&Level1Event{ID: 1}, &Level1Event{ID: 2}}, nil
 	})
 	require.NoError(t, err)
 
 	// Each level-1 event generates a level-2 event
-	err = dorky.RegisterEventHandler(mb, func(ctx context.Context, evt *Level1Event) ([]dorky.Event, error) {
+	err = messagebus.RegisterEventHandler(mb, func(ctx context.Context, evt *Level1Event) ([]messages.Event, error) {
 		executionOrder = append(executionOrder, fmt.Sprintf("level1-%d", evt.ID))
-		return []dorky.Event{&Level2Event{ID: evt.ID}}, nil
+		return []messages.Event{&Level2Event{ID: evt.ID}}, nil
 	})
 	require.NoError(t, err)
 
 	// Each level-2 event generates a level-3 event
-	err = dorky.RegisterEventHandler(mb, func(ctx context.Context, evt *Level2Event) ([]dorky.Event, error) {
+	err = messagebus.RegisterEventHandler(mb, func(ctx context.Context, evt *Level2Event) ([]messages.Event, error) {
 		executionOrder = append(executionOrder, fmt.Sprintf("level2-%d", evt.ID))
-		return []dorky.Event{&Level3Event{ID: evt.ID}}, nil
+		return []messages.Event{&Level3Event{ID: evt.ID}}, nil
 	})
 	require.NoError(t, err)
 
 	// Level-3 events don't generate more events
-	err = dorky.RegisterEventHandler(mb, func(ctx context.Context, evt *Level3Event) ([]dorky.Event, error) {
+	err = messagebus.RegisterEventHandler(mb, func(ctx context.Context, evt *Level3Event) ([]messages.Event, error) {
 		executionOrder = append(executionOrder, fmt.Sprintf("level3-%d", evt.ID))
 		return nil, nil
 	})
@@ -232,27 +232,27 @@ func TestEventCascade(t *testing.T) {
 
 // Test that command handler errors propagate correctly and events aren't dispatched
 func TestCommandHandlerErrors(t *testing.T) {
-	mb := dorky.NewMessageBus(logger)
+	mb := messagebus.New(logger)
 
 	type FailingCommand struct {
-		dorky.BaseCommand
+		messages.BaseCommand
 	}
 
 	type SuccessEvent struct {
-		dorky.BaseEvent
+		messages.BaseEvent
 	}
 
 	eventHandlerCalled := false
 
 	// Command handler that returns an error
-	err := dorky.RegisterCommandHandler(mb, func(ctx context.Context, cmd *FailingCommand) ([]dorky.Event, error) {
+	err := messagebus.RegisterCommandHandler(mb, func(ctx context.Context, cmd *FailingCommand) ([]messages.Event, error) {
 		// Return events AND an error - events should NOT be dispatched
-		return []dorky.Event{&SuccessEvent{}}, fmt.Errorf("command failed")
+		return []messages.Event{&SuccessEvent{}}, fmt.Errorf("command failed")
 	})
 	require.NoError(t, err)
 
 	// Event handler should not be called when command fails
-	err = dorky.RegisterEventHandler(mb, func(ctx context.Context, evt *SuccessEvent) ([]dorky.Event, error) {
+	err = messagebus.RegisterEventHandler(mb, func(ctx context.Context, evt *SuccessEvent) ([]messages.Event, error) {
 		eventHandlerCalled = true
 		return nil, nil
 	})
@@ -272,14 +272,14 @@ func TestCommandHandlerErrors(t *testing.T) {
 
 // Test that event handler errors are logged but don't stop other handlers
 func TestEventHandlerErrors(t *testing.T) {
-	mb := dorky.NewMessageBus(logger)
+	mb := messagebus.New(logger)
 
 	type TriggerCommand struct {
-		dorky.BaseCommand
+		messages.BaseCommand
 	}
 
 	type ProcessEvent struct {
-		dorky.BaseEvent
+		messages.BaseEvent
 	}
 
 	handler1Called := false
@@ -287,27 +287,27 @@ func TestEventHandlerErrors(t *testing.T) {
 	handler3Called := false
 
 	// Command generates an event
-	err := dorky.RegisterCommandHandler(mb, func(ctx context.Context, cmd *TriggerCommand) ([]dorky.Event, error) {
-		return []dorky.Event{&ProcessEvent{}}, nil
+	err := messagebus.RegisterCommandHandler(mb, func(ctx context.Context, cmd *TriggerCommand) ([]messages.Event, error) {
+		return []messages.Event{&ProcessEvent{}}, nil
 	})
 	require.NoError(t, err)
 
 	// First handler succeeds
-	err = dorky.RegisterEventHandler(mb, func(ctx context.Context, evt *ProcessEvent) ([]dorky.Event, error) {
+	err = messagebus.RegisterEventHandler(mb, func(ctx context.Context, evt *ProcessEvent) ([]messages.Event, error) {
 		handler1Called = true
 		return nil, nil
 	})
 	require.NoError(t, err)
 
 	// Second handler fails
-	err = dorky.RegisterEventHandler(mb, func(ctx context.Context, evt *ProcessEvent) ([]dorky.Event, error) {
+	err = messagebus.RegisterEventHandler(mb, func(ctx context.Context, evt *ProcessEvent) ([]messages.Event, error) {
 		handler2Called = true
 		return nil, fmt.Errorf("handler 2 failed")
 	})
 	require.NoError(t, err)
 
 	// Third handler succeeds
-	err = dorky.RegisterEventHandler(mb, func(ctx context.Context, evt *ProcessEvent) ([]dorky.Event, error) {
+	err = messagebus.RegisterEventHandler(mb, func(ctx context.Context, evt *ProcessEvent) ([]messages.Event, error) {
 		handler3Called = true
 		return nil, nil
 	})
@@ -328,13 +328,13 @@ func TestEventHandlerErrors(t *testing.T) {
 
 // Test context cancellation behavior
 func TestContextCancellation(t *testing.T) {
-	mb := dorky.NewMessageBus(logger)
+	mb := messagebus.New(logger)
 
 	type SlowCommand struct {
-		dorky.BaseCommand
+		messages.BaseCommand
 	}
 
-	err := dorky.RegisterCommandHandler(mb, func(ctx context.Context, cmd *SlowCommand) ([]dorky.Event, error) {
+	err := messagebus.RegisterCommandHandler(mb, func(ctx context.Context, cmd *SlowCommand) ([]messages.Event, error) {
 		return nil, nil
 	})
 	require.NoError(t, err)
@@ -354,37 +354,37 @@ func TestContextCancellation(t *testing.T) {
 
 // Test duplicate handler registration behavior
 func TestDuplicateHandlerRegistration(t *testing.T) {
-	mb := dorky.NewMessageBus(logger)
+	mb := messagebus.New(logger)
 
 	type MyCommand struct {
-		dorky.BaseCommand
+		messages.BaseCommand
 	}
 
 	type MyEvent struct {
-		dorky.BaseEvent
+		messages.BaseEvent
 	}
 
 	// Register first command handler - should succeed
-	err := dorky.RegisterCommandHandler(mb, func(ctx context.Context, cmd *MyCommand) ([]dorky.Event, error) {
+	err := messagebus.RegisterCommandHandler(mb, func(ctx context.Context, cmd *MyCommand) ([]messages.Event, error) {
 		return nil, nil
 	})
 	require.NoError(t, err)
 
 	// Register duplicate command handler - should fail
-	err = dorky.RegisterCommandHandler(mb, func(ctx context.Context, cmd *MyCommand) ([]dorky.Event, error) {
+	err = messagebus.RegisterCommandHandler(mb, func(ctx context.Context, cmd *MyCommand) ([]messages.Event, error) {
 		return nil, nil
 	})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "handler already registered")
 
 	// Register first event handler - should succeed
-	err = dorky.RegisterEventHandler(mb, func(ctx context.Context, evt *MyEvent) ([]dorky.Event, error) {
+	err = messagebus.RegisterEventHandler(mb, func(ctx context.Context, evt *MyEvent) ([]messages.Event, error) {
 		return nil, nil
 	})
 	require.NoError(t, err)
 
 	// Register second event handler for same type - should succeed (multiple allowed)
-	err = dorky.RegisterEventHandler(mb, func(ctx context.Context, evt *MyEvent) ([]dorky.Event, error) {
+	err = messagebus.RegisterEventHandler(mb, func(ctx context.Context, evt *MyEvent) ([]messages.Event, error) {
 		return nil, nil
 	})
 	require.NoError(t, err)
