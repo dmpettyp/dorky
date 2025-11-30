@@ -3,7 +3,7 @@ package messages
 import (
 	"time"
 
-	"github.com/dmpettyp/id"
+	"github.com/dmpettyp/dorky/id"
 )
 
 type CommandID struct{ id.ID }
