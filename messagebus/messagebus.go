@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"reflect"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/dmpettyp/dorky/messages"
 )
@@ -24,20 +26,28 @@ type MessageBus struct {
 	eventsToProcess *Queue[messages.Event]
 	wg              sync.WaitGroup
 	logger          *slog.Logger
+	metrics         MetricsHook
 }
 
-func New(logger *slog.Logger) *MessageBus {
-	logger.Info("creating MessageBus")
-
+func New(opts ...Option) *MessageBus {
 	mb := &MessageBus{
 		commands:        make(chan messageBusCommand),
 		eventHandlers:   make(map[reflect.Type][]func(context.Context, messages.Event) ([]messages.Event, error)),
 		commandHandlers: make(map[reflect.Type]func(context.Context, messages.Command) ([]messages.Event, error)),
 		eventsToProcess: NewQueue[messages.Event](),
-		logger:          logger,
+		logger:          slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
 
-	logger.Info("MessageBus created")
+	for _, opt := range opts {
+		opt(mb)
+	}
+
+	if mb.logger == nil {
+		mb.logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	}
+
+	mb.logger.Info("creating MessageBus")
+	mb.logger.Info("MessageBus created")
 
 	return mb
 }
@@ -207,7 +217,9 @@ func (mb *MessageBus) dispatchCommand(ctx context.Context, command messages.Comm
 		return fmt.Errorf("no handler for command type %v", commandType)
 	}
 
+	start := time.Now()
 	events, err := handler(ctx, command)
+	mb.observeCommandHandler(command, err, start)
 
 	if err != nil {
 		mb.logger.Error("invoking command handler failed", "error", err.Error())
@@ -239,7 +251,9 @@ func (mb *MessageBus) dispatchEvents(ctx context.Context) {
 
 		if handlers, ok := mb.eventHandlers[eventType]; ok {
 			for _, handler := range handlers {
+				start := time.Now()
 				events, err := handler(ctx, event)
+				mb.observeEventHandler(event, err, start)
 
 				if err != nil {
 					mb.logger.Error("invoking event handler failed", "error", err.Error())
@@ -249,4 +263,26 @@ func (mb *MessageBus) dispatchEvents(ctx context.Context) {
 			}
 		}
 	}
+}
+
+func (mb *MessageBus) observeCommandHandler(command messages.Command, err error, start time.Time) {
+	if mb.metrics == nil {
+		return
+	}
+	status := "success"
+	if err != nil {
+		status = "error"
+	}
+	mb.metrics.ObserveCommand(command.GetType(), status, time.Since(start))
+}
+
+func (mb *MessageBus) observeEventHandler(event messages.Event, err error, start time.Time) {
+	if mb.metrics == nil {
+		return
+	}
+	status := "success"
+	if err != nil {
+		status = "error"
+	}
+	mb.metrics.ObserveEvent(event.GetType(), status, time.Since(start))
 }

@@ -3,8 +3,6 @@ package messagebus_test
 import (
 	"context"
 	"fmt"
-	"io"
-	"log/slog"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -12,10 +10,6 @@ import (
 	"github.com/dmpettyp/dorky/messagebus"
 	"github.com/dmpettyp/dorky/messages"
 )
-
-var logger = slog.New(slog.NewTextHandler(io.Discard, nil))
-
-// var logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
 
 // Define valid arguments for event and command handlers
 type commandArg struct {
@@ -35,7 +29,7 @@ type eventArg1 eventArg
 type eventArg2 eventArg
 
 func TestTypeSafeRegistration(t *testing.T) {
-	mb := messagebus.New(logger)
+	mb := messagebus.New()
 
 	cmd1Count := 0
 	cmd2Count := 0
@@ -127,7 +121,7 @@ func (s *OrderService) OnOrderShipped(ctx context.Context, evt *OrderShippedEven
 
 // Test that method-based handlers work (handlers as methods on structs)
 func TestMethodBasedHandlers(t *testing.T) {
-	mb := messagebus.New(logger)
+	mb := messagebus.New()
 
 	svc := &OrderService{}
 
@@ -162,7 +156,7 @@ func TestMethodBasedHandlers(t *testing.T) {
 
 // Test event cascade - events generating more events (breadth-first)
 func TestEventCascade(t *testing.T) {
-	mb := messagebus.New(logger)
+	mb := messagebus.New()
 
 	type TriggerCommand struct {
 		messages.BaseCommand
@@ -232,7 +226,7 @@ func TestEventCascade(t *testing.T) {
 
 // Test that command handler errors propagate correctly and events aren't dispatched
 func TestCommandHandlerErrors(t *testing.T) {
-	mb := messagebus.New(logger)
+	mb := messagebus.New()
 
 	type FailingCommand struct {
 		messages.BaseCommand
@@ -272,7 +266,7 @@ func TestCommandHandlerErrors(t *testing.T) {
 
 // Test that event handler errors are logged but don't stop other handlers
 func TestEventHandlerErrors(t *testing.T) {
-	mb := messagebus.New(logger)
+	mb := messagebus.New()
 
 	type TriggerCommand struct {
 		messages.BaseCommand
@@ -328,7 +322,7 @@ func TestEventHandlerErrors(t *testing.T) {
 
 // Test context cancellation behavior
 func TestContextCancellation(t *testing.T) {
-	mb := messagebus.New(logger)
+	mb := messagebus.New()
 
 	type SlowCommand struct {
 		messages.BaseCommand
@@ -354,7 +348,7 @@ func TestContextCancellation(t *testing.T) {
 
 // Test duplicate handler registration behavior
 func TestDuplicateHandlerRegistration(t *testing.T) {
-	mb := messagebus.New(logger)
+	mb := messagebus.New()
 
 	type MyCommand struct {
 		messages.BaseCommand
